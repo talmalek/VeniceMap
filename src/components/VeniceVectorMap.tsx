@@ -211,32 +211,3 @@ export const VeniceVectorMap: React.FC<VeniceVectorMapProps> = React.memo(
 );
 
 VeniceVectorMap.displayName = 'VeniceVectorMap';
-
-/**
- * Large translucent cartographic outline floating softly in the upper-right background,
- * echoing the layered dual-map depth motif from the reference design.
- */
-export const VeniceGhostOutline: React.FC<{className?: string}> = React.memo(
-  ({className = ''}) => (
-    <svg
-      viewBox="0 0 400 280"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      {VENICE_SESTIERI.map((zone) => (
-        <path
-          key={`ghost-${zone.id}`}
-          d={zone.path}
-          fill="rgba(255, 255, 255, 0.035)"
-          stroke="rgba(255, 255, 255, 0.22)"
-          strokeWidth="1.25"
-          strokeLinejoin="round"
-        />
-      ))}
-    </svg>
-  )
-);
-
-VeniceGhostOutline.displayName = 'VeniceGhostOutline';

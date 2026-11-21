@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Compass, Images, Landmark} from 'lucide-react';
-import {VeniceGhostOutline, VeniceVectorMap} from './VeniceVectorMap';
+import {VeniceVectorMap} from './VeniceVectorMap';
 
 interface CloudFrameOverlayProps {
   zoomProgress: number; // 0 = overview, 1 = zoomed in
@@ -45,26 +45,33 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
     const cardsOpacity = Math.max(0, 1 - p * 2.6);
     const showBottomCards = !isAlbumActive && cardsOpacity > 0.02;
 
-    // Responsive geometry for the "EXPLORE VENICE" brush logo glide:
-    // Rendered at crisp full hero resolution and scaled down cleanly via GPU transform
-    // from center-left hero position (p = 0) to compact upper-left corner (p = 1).
+    // Responsive geometry for the centered "EXPLORE VENICE" editorial serif logo + Venice Vector Map:
+    // Both elements are symmetrically centered on the screen at overview (p = 0);
+    // the logo smoothly glides via GPU transform to the compact upper-left corner on zoom (p = 1).
     const isSmall = viewport.width < 640;
     const isMedium = viewport.width >= 640 && viewport.width < 1024;
 
-    const logoNaturalWidth = isSmall ? 260 : isMedium ? 360 : 450;
-    const logoNaturalHeight = isSmall ? 115 : isMedium ? 150 : 185;
+    const logoNaturalWidth = isSmall ? 260 : isMedium ? 310 : 410;
+    const logoNaturalHeight = isSmall ? 84 : isMedium ? 96 : 124;
+    const mapWidth = isSmall ? 210 : isMedium ? 240 : 330;
+    const heroGap = isMedium ? 28 : 40;
+    const totalHeroWidth = logoNaturalWidth + heroGap + mapWidth;
+    const heroCenterY = viewport.height * (isSmall ? 0.34 : 0.48);
+
     const startScale = 1;
-    const endScale = isSmall ? 0.42 : isMedium ? 0.34 : 0.29;
+    const endScale = isSmall ? 0.44 : isMedium ? 0.38 : 0.34;
     const currentScale = startScale + (endScale - startScale) * glide;
 
-    // Hero center position: slightly left of center on desktop so the Venice Vector Map sits alongside it
-    const heroOffsetX = isSmall ? 0 : isMedium ? -105 : -148;
-    const startX = Math.max(20, viewport.width / 2 - logoNaturalWidth / 2 + heroOffsetX);
-    const startY = Math.max(96, viewport.height * (isSmall ? 0.25 : 0.38) - logoNaturalHeight / 2);
+    // Exact symmetric screen-center placement for [Logo + Gap + VectorMap] on sm+, stacked center on mobile
+    const startX = isSmall
+      ? Math.max(16, viewport.width / 2 - logoNaturalWidth / 2)
+      : Math.max(20, viewport.width / 2 - totalHeroWidth / 2);
+    const startY = Math.max(88, heroCenterY - logoNaturalHeight / 2);
+    const mapOffsetX = -totalHeroWidth / 2 + logoNaturalWidth + heroGap;
 
     // Docked upper-left corner position
     const endX = isSmall ? 16 : 24;
-    const endY = isSmall ? 12 : 14;
+    const endY = isSmall ? 14 : 16;
 
     const currentX = startX + (endX - startX) * glide;
     const currentY = startY + (endY - startY) * glide;
@@ -76,8 +83,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
       <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden select-none contain-overlay">
         {/*
           1. Moody Venetian Lagoon Emerald Vignette & Warm Upper-Right Sunset Mist
-          Echoes the rich dark emerald & warm peach atmospheric depth of the reference design,
-          fading out cleanly as the user zooms into the live 3D buildings of Venice.
+          Fades out cleanly as the user zooms into the live 3D buildings of Venice.
         */}
         {atmosphereOpacity > 0.01 && (
           <div
@@ -102,7 +108,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
               }}
             />
 
-            {/* Warm Sunset Mist Wash in Upper-Right Corner (Reference Atmospheric Glow) */}
+            {/* Warm Sunset Mist Wash in Upper-Right Corner */}
             <div
               className="absolute -top-24 -right-24 w-[56vw] max-w-[780px] h-[56vh] max-h-[540px]"
               style={{
@@ -110,11 +116,6 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
                   'radial-gradient(ellipse at 72% 28%, rgba(235, 190, 152, 0.38) 0%, rgba(212, 162, 122, 0.16) 44%, rgba(6, 30, 25, 0) 74%)',
               }}
             />
-
-            {/* Large Translucent Venice Ghost Silhouette in the Upper-Right Mist */}
-            <div className="hidden md:block absolute top-[7%] right-[3%] w-[40vw] max-w-[560px] pointer-events-none">
-              <VeniceGhostOutline className="w-full h-auto opacity-80" />
-            </div>
           </div>
         )}
 
@@ -128,21 +129,23 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
         />
 
         {/*
-          2. White Vector Map of Venice Positioned to the Side of "EXPLORE VENICE"
+          2. White Vector Map of Venice Centered with "EXPLORE VENICE"
           Interactive: clicking any sestiere flies smoothly into that district in 3D.
           Fades and expands softly away as the user zooms into the live 3D map.
         */}
-        {vectorMapOpacity > 0.01 && (
+        {!isSmall && vectorMapOpacity > 0.01 && (
           <div
-            className="hidden sm:block absolute left-1/2 top-[39%] will-change-[transform,opacity]"
+            className="absolute left-1/2 will-change-[transform,opacity]"
             style={{
+              top: `${heroCenterY}px`,
+              width: `${mapWidth}px`,
               opacity: vectorMapOpacity,
-              transform: `translate3d(${isMedium ? 45 : 72}px, -50%, 0) scale(${vectorMapScale})`,
+              transform: `translate3d(${mapOffsetX}px, -50%, 0) scale(${vectorMapScale})`,
               pointerEvents: vectorMapOpacity > 0.45 ? 'auto' : 'none',
             }}
           >
             <VeniceVectorMap
-              className="w-[230px] md:w-[300px] lg:w-[355px]"
+              className="w-full"
               onSelectDistrict={(lat, lng) => onFlyToSpot(lat, lng, 1100)}
             />
           </div>
@@ -151,22 +154,24 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
         {/* Compact Mobile Venice Vector Map centered below title at overview */}
         {isSmall && vectorMapOpacity > 0.01 && (
           <div
-            className="absolute left-1/2 top-[46%] will-change-[transform,opacity]"
+            className="absolute left-1/2 will-change-[transform,opacity]"
             style={{
+              top: `${viewport.height * 0.54}px`,
+              width: `${mapWidth}px`,
               opacity: vectorMapOpacity,
-              transform: `translate3d(-50%, 0, 0) scale(${vectorMapScale})`,
+              transform: `translate3d(-50%, -50%, 0) scale(${vectorMapScale})`,
               pointerEvents: vectorMapOpacity > 0.45 ? 'auto' : 'none',
             }}
           >
             <VeniceVectorMap
-              className="w-[210px]"
+              className="w-full"
               onSelectDistrict={(lat, lng) => onFlyToSpot(lat, lng, 1100)}
             />
           </div>
         )}
 
         {/*
-          3. Dynamic Morphing "EXPLORE VENICE" Brush Display Logo
+          3. Dynamic Morphing "EXPLORE VENICE" Editorial Serif Display Logo
           Smoothly glides via GPU transform from center hero to the upper-left corner
           and stays docked in small as the user scrolls/zooms into the 3D buildings.
         */}
@@ -183,7 +188,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
               ? 'Explore Venice — Return to Overview'
               : 'Explore Venice — Zoom into 3D Map'
           }
-          className="fixed left-0 top-0 z-30 pointer-events-auto cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] rounded-lg will-change-transform"
+          className="fixed left-0 top-0 z-30 pointer-events-auto cursor-pointer text-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] rounded-lg will-change-transform"
           style={{
             transformOrigin: 'top left',
             transform: `translate3d(${currentX.toFixed(1)}px, ${currentY.toFixed(1)}px, 0) scale(${currentScale.toFixed(4)})`,
@@ -191,22 +196,23 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
             width: `${logoNaturalWidth}px`,
           }}
         >
-          <div className="flex flex-col items-center sm:items-start leading-none">
+          <div className="flex flex-col items-center leading-none">
             <span
-              className="font-brush-display text-white tracking-[0.06em] block drop-shadow-[0_6px_18px_rgba(2,16,12,0.88)]"
+              className="font-sans font-medium text-white/95 uppercase block drop-shadow-[0_4px_14px_rgba(2,16,12,0.88)]"
               style={{
-                fontSize: isSmall ? '1.85rem' : isMedium ? '2.55rem' : '3.15rem',
-                transform: 'rotate(-4deg) translateX(12%)',
+                fontSize: isSmall ? '0.78rem' : isMedium ? '0.92rem' : '1.08rem',
+                letterSpacing: '0.42em',
+                marginBottom: isSmall ? '5px' : '7px',
+                paddingLeft: '0.42em',
               }}
             >
               EXPLORE
             </span>
             <h1
-              className="font-brush-display text-white tracking-[0.02em] block -mt-2 sm:-mt-3 drop-shadow-[0_10px_28px_rgba(2,16,12,0.92)]"
+              className="font-display-serif font-bold text-white uppercase tracking-[0.08em] block drop-shadow-[0_10px_28px_rgba(2,16,12,0.92)]"
               style={{
-                fontSize: isSmall ? '4.6rem' : isMedium ? '6.4rem' : '8.2rem',
-                lineHeight: 0.9,
-                transform: 'rotate(-2.5deg)',
+                fontSize: isSmall ? '3.1rem' : isMedium ? '4.05rem' : '5.35rem',
+                lineHeight: 0.94,
               }}
             >
               VENICE

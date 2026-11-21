@@ -3,7 +3,7 @@
 
 @layer base {
   :root {
-    --font-brush: 'Sedgwick Ave Display', cursive;
+    --font-display: 'Cinzel', Georgia, 'Times New Roman', serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
 
@@ -25,8 +25,8 @@
     color: var(--ink-light);
   }
 
-  .font-brush-display {
-    font-family: var(--font-brush);
+  .font-display-serif {
+    font-family: var(--font-display);
   }
 
   .font-mono-tabular {
