@@ -1,11 +1,22 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {defineConfig, loadEnv} from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function encryptApiKey(plaintext: string, password: string): string {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(password, salt, 600_000, 32, 'sha256');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([salt, iv, encrypted, authTag]).toString('base64');
+}
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
@@ -16,11 +27,33 @@ export default defineConfig(({mode}) => {
     process.env.GOOGLE_MAPS_API_KEY ||
     '';
 
+  const unlockPassword =
+    env.UNLOCK_PASSWORD ||
+    env.VITE_UNLOCK_PASSWORD ||
+    process.env.UNLOCK_PASSWORD ||
+    process.env.VITE_UNLOCK_PASSWORD ||
+    '';
+
+  const preEncryptedKey =
+    env.VITE_ENCRYPTED_MAPS_KEY ||
+    process.env.VITE_ENCRYPTED_MAPS_KEY ||
+    '';
+
+  let encryptedMapsKey = preEncryptedKey;
+  if (!encryptedMapsKey && mapsApiKey && unlockPassword) {
+    encryptedMapsKey = encryptApiKey(mapsApiKey, unlockPassword);
+  }
+
+  // Never expose raw API key in production builds; only expose encrypted payload.
+  const publicApiKey =
+    mode === 'development' && !unlockPassword ? mapsApiKey : '';
+
   return {
     base: mode === 'production' ? '/VeniceMap/' : '/',
     plugins: [react(), tailwindcss()],
     define: {
-      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(mapsApiKey),
+      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(publicApiKey),
+      'import.meta.env.VITE_ENCRYPTED_MAPS_KEY': JSON.stringify(encryptedMapsKey),
     },
     resolve: {
       alias: {

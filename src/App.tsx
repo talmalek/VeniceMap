@@ -23,15 +23,17 @@ import {
   Home,
   Images,
   Key,
+  Lock,
   Minus,
   Plus,
   RotateCw,
   Sliders,
-  ExternalLink,
   AlertCircle,
   Check,
+  Unlock,
+  X,
 } from 'lucide-react';
-import { VeniceVectorMap } from './components/VeniceVectorMap';
+import {decryptApiKey} from './utils/cryptoKey';
 
 // Code-split on-demand UI drawers, native modals, and bottom filmstrip out of the initial critical bundle
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
@@ -39,18 +41,15 @@ const AlbumImportModal = lazy(() => import('./components/AlbumImportModal'));
 const AlbumFilmstrip = lazy(() => import('./components/AlbumFilmstrip'));
 
 const API_KEY_STORAGE_KEY = 'venice_maps_api_key';
+const ENCRYPTED_MAPS_KEY = (import.meta.env.VITE_ENCRYPTED_MAPS_KEY || '').trim();
 
 const getStoredApiKey = (): string => {
   if (typeof window === 'undefined') return '';
   try {
-    const params = new URLSearchParams(window.location.search);
-    const keyParam = params.get('key') || params.get('gmp_key');
-    if (keyParam) {
-      localStorage.setItem(API_KEY_STORAGE_KEY, keyParam.trim());
-      return keyParam.trim();
-    }
-    const stored = localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (stored && stored.trim()) return stored.trim();
+    const sessionKey = sessionStorage.getItem(API_KEY_STORAGE_KEY);
+    if (sessionKey && sessionKey.trim()) return sessionKey.trim();
+    const localKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (localKey && localKey.trim()) return localKey.trim();
   } catch {
     // Ignore storage errors
   }
@@ -62,9 +61,14 @@ const COLOR_STORAGE_KEY = 'venice_globe_color_grading_v2';
 export default function App() {
   const globeRef = React.useRef<Globe3DLayerRef | null>(null);
 
-  // Google Maps Platform API Key state & modal
+  // Google Maps Platform API Key & Password Unlock state
   const [apiKey, setApiKey] = useState<string>(getStoredApiKey);
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(() => !getStoredApiKey());
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>('');
+  const [rememberDevice, setRememberDevice] = useState<boolean>(false);
+  const [isDecrypting, setIsDecrypting] = useState<boolean>(false);
+  const [unlockError, setUnlockError] = useState<string>('');
+  const [showManualKey, setShowManualKey] = useState<boolean>(() => !ENCRYPTED_MAPS_KEY);
   const [inputKey, setInputKey] = useState<string>('');
   const [authFailed, setAuthFailed] = useState<boolean>(false);
 
@@ -76,27 +80,70 @@ export default function App() {
     };
   }, []);
 
-  const handleSaveApiKey = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleUnlockWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordInput) return;
+    if (!ENCRYPTED_MAPS_KEY) {
+      setUnlockError('No encrypted API key is configured in this build.');
+      return;
+    }
+
+    setIsDecrypting(true);
+    setUnlockError('');
+    try {
+      const decrypted = await decryptApiKey(ENCRYPTED_MAPS_KEY, passwordInput);
+      try {
+        if (rememberDevice) {
+          localStorage.setItem(API_KEY_STORAGE_KEY, decrypted);
+          sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+        } else {
+          sessionStorage.setItem(API_KEY_STORAGE_KEY, decrypted);
+          localStorage.removeItem(API_KEY_STORAGE_KEY);
+        }
+      } catch {
+        // Storage unavailable; keep in memory
+      }
+      setApiKey(decrypted);
+      setPasswordInput('');
+      setAuthFailed(false);
+      setShowApiKeyModal(false);
+    } catch {
+      setUnlockError('Incorrect password. Access denied.');
+    } finally {
+      setIsDecrypting(false);
+    }
+  };
+
+  const handleSaveManualKey = (e: React.FormEvent) => {
+    e.preventDefault();
     const clean = inputKey.trim();
     if (!clean) return;
     try {
-      localStorage.setItem(API_KEY_STORAGE_KEY, clean);
+      if (rememberDevice) {
+        localStorage.setItem(API_KEY_STORAGE_KEY, clean);
+        sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+      } else {
+        sessionStorage.setItem(API_KEY_STORAGE_KEY, clean);
+        localStorage.removeItem(API_KEY_STORAGE_KEY);
+      }
     } catch {}
     setApiKey(clean);
+    setInputKey('');
     setAuthFailed(false);
     setShowApiKeyModal(false);
-    window.location.reload();
   };
 
   const handleClearApiKey = () => {
     try {
+      sessionStorage.removeItem(API_KEY_STORAGE_KEY);
       localStorage.removeItem(API_KEY_STORAGE_KEY);
     } catch {}
     setApiKey('');
     setInputKey('');
+    setPasswordInput('');
     setAuthFailed(false);
-    setShowApiKeyModal(true);
+    setShowApiKeyModal(false);
+    window.location.reload();
   };
 
   // Zoom progress drives the Explore Venice logo glide into the upper-left corner (0 = overview, 1 = zoomed in)
@@ -298,26 +345,20 @@ export default function App() {
 
       {/* Main Stage: Full-Viewport 3D Photorealistic Venice Buildings Globe */}
       <main className="w-full h-full relative">
-        {apiKey ? (
-          <Globe3DLayer
-            ref={globeRef}
-            initialZoom={coverZoom}
-            showLocations={isAlbumActive}
-            photos={albumPhotos}
-            selectedPhoto={selectedPhoto}
-            hoveredPhotoId={hoveredPhotoId}
-            colorSettings={colorSettings}
-            isComparing={isComparing}
-            onTiltChange={setIs3DActive}
-            onZoomProgressChange={setZoomProgress}
-            onSelectPhoto={handleSelectPhoto}
-            onHoverPhoto={setHoveredPhotoId}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-[#061E19] relative overflow-hidden">
-            <VeniceVectorMap className="w-full max-w-2xl h-auto opacity-35 animate-pulse" />
-          </div>
-        )}
+        <Globe3DLayer
+          ref={globeRef}
+          initialZoom={coverZoom}
+          showLocations={isAlbumActive}
+          photos={albumPhotos}
+          selectedPhoto={selectedPhoto}
+          hoveredPhotoId={hoveredPhotoId}
+          colorSettings={colorSettings}
+          isComparing={isComparing}
+          onTiltChange={setIs3DActive}
+          onZoomProgressChange={setZoomProgress}
+          onSelectPhoto={handleSelectPhoto}
+          onHoverPhoto={setHoveredPhotoId}
+        />
 
         {/* Explore Venice Brush Hero, White Vector Map & Dynamic Upper-Left Logo Glide */}
         <CloudFrameOverlay
@@ -333,7 +374,7 @@ export default function App() {
         <header className="fixed top-0 inset-x-0 z-30 pointer-events-none pl-28 pr-14 sm:px-8 py-5 flex items-center justify-center">
           <nav
             aria-label="Primary Venice navigation"
-            className="pointer-events-auto flex items-center gap-4 sm:gap-6 text-xs sm:text-[13px] font-medium tracking-[0.04em] text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]"
+            className="pointer-events-auto flex items-center gap-4 sm:gap-8 text-xs sm:text-[13px] font-medium tracking-[0.04em] text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]"
           >
             <button
               type="button"
@@ -395,23 +436,6 @@ export default function App() {
               }`}
             >
               Calibration
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setInputKey(apiKey);
-                setShowApiKeyModal(true);
-              }}
-              className={`py-1 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 border-b-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] ${
-                !apiKey || authFailed
-                  ? 'text-amber-400 border-amber-400 font-semibold'
-                  : 'text-white/80 border-transparent hover:text-white hover:border-white/50'
-              }`}
-              title="Google Maps Platform API Key"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>{apiKey ? 'API Key' : 'Connect Maps'}</span>
             </button>
           </nav>
         </header>
@@ -574,10 +598,55 @@ export default function App() {
               >
                 <Sliders className="w-4 h-4" />
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUnlockError('');
+                  setShowApiKeyModal(true);
+                }}
+                title="Owner Key Access (Lock / Manage API Key)"
+                aria-label="Owner Key Access"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-emerald-300/90 hover:bg-white/12 hover:text-white transition-all duration-150 active:scale-95 cursor-pointer"
+              >
+                <Key className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </main>
       </div>
+  );
+
+  const lockedGrayScreen = (
+    <div className="relative w-screen h-screen overflow-hidden bg-[#2b2d30] text-neutral-300 select-none flex flex-col items-center justify-center p-6">
+      {/* Small Key Button in Top-Right Corner */}
+      <button
+        type="button"
+        onClick={() => {
+          setUnlockError('');
+          setPasswordInput('');
+          setShowApiKeyModal(true);
+        }}
+        title="Unlock Google Maps with Password"
+        aria-label="Unlock Google Maps"
+        className="fixed top-4 right-4 z-40 w-9 h-9 rounded-lg bg-neutral-700/80 hover:bg-neutral-600 border border-neutral-500/40 text-neutral-200 hover:text-white flex items-center justify-center shadow-lg transition-all duration-150 active:scale-95 cursor-pointer"
+      >
+        <Key className="w-4 h-4" />
+      </button>
+
+      {/* Gray Locked Notice */}
+      <div className="max-w-sm text-center space-y-3">
+        <div className="w-12 h-12 mx-auto rounded-full bg-neutral-700/70 border border-neutral-600 flex items-center justify-center text-neutral-400">
+          <Lock className="w-5 h-5" />
+        </div>
+        <h1 className="text-base font-semibold text-neutral-200">
+          Google Maps Unavailable
+        </h1>
+        <p className="text-xs text-neutral-400 leading-relaxed">
+          This page can&apos;t load Google Maps without an authorized API key.
+        </p>
+      </div>
+    </div>
   );
 
   return (
@@ -590,103 +659,174 @@ export default function App() {
           {mainStage}
         </APIProvider>
       ) : (
-        mainStage
+        lockedGrayScreen
       )}
 
-      {/* Google Maps Platform API Key Modal */}
+      {/* Owner Password / API Key Unlock Modal */}
       {showApiKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-text">
-          <div className="w-full max-w-md rounded-2xl venice-glass-strong border border-[#E6B86A]/40 p-6 sm:p-7 shadow-2xl text-white">
-            <div className="flex items-center gap-3 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in select-text">
+          <div className="w-full max-w-sm rounded-2xl venice-glass-strong border border-[#E6B86A]/40 p-6 shadow-2xl text-white relative">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyModal(false)}
+              aria-label="Close"
+              className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4 pr-6">
               <div className="w-10 h-10 rounded-xl bg-[#E6B86A]/20 border border-[#E6B86A]/50 flex items-center justify-center text-[#E6B86A] shrink-0">
-                <Key className="w-5 h-5" />
+                {apiKey ? <Unlock className="w-5 h-5" /> : <Key className="w-5 h-5" />}
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
-                  Google Maps API Key
+                <h2 className="text-base font-bold text-white tracking-wide">
+                  {apiKey ? 'Maps Unlocked' : 'Owner Unlock'}
                 </h2>
                 <p className="text-xs text-white/70">
-                  Required for 3D Photorealistic Venice Map
+                  {apiKey
+                    ? 'Google Maps 3D session is active'
+                    : 'Enter password to decrypt Maps API key'}
                 </p>
               </div>
             </div>
 
             {authFailed && (
-              <div className="mb-4 p-3 rounded-lg bg-red-950/70 border border-red-500/50 flex items-start gap-2.5 text-xs text-red-200">
+              <div className="mb-4 p-3 rounded-lg bg-red-950/70 border border-red-500/50 flex items-start gap-2 text-xs text-red-200">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="block font-semibold">Authentication Failed (ApiProjectMapError)</strong>
-                  <p className="mt-0.5 text-white/80">
-                    Verify that your Google Cloud key has both <strong>Maps JavaScript API</strong> and <strong>Map Tiles API</strong> enabled.
-                  </p>
-                </div>
+                <span>
+                  Google Maps rejected this API key. Verify Maps JavaScript API and Map Tiles API are enabled.
+                </span>
               </div>
             )}
 
-            <div className="space-y-2 mb-4 text-xs text-white/80 bg-white/5 rounded-xl p-3 border border-white/10">
-              <p className="font-medium text-white/95">
-                Enable these APIs in Google Cloud Console:
-              </p>
-              <ul className="list-disc list-inside space-y-0.5 text-white/75 text-[11px]">
-                <li><strong>Maps JavaScript API</strong></li>
-                <li><strong>Map Tiles API</strong> (Required for 3D Photorealistic Tiles)</li>
-              </ul>
-              <a
-                href="https://console.cloud.google.com/google/maps-apis/credentials"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#E6B86A] hover:text-[#F5CF8B] underline inline-flex items-center gap-1 text-[11px] pt-1"
-              >
-                <span>Open Google Cloud Credentials</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            <form onSubmit={handleSaveApiKey} className="space-y-3.5">
-              <div>
-                <label htmlFor="maps-key-input" className="block text-xs font-medium text-white/90 mb-1">
-                  API Key:
-                </label>
-                <input
-                  id="maps-key-input"
-                  type="text"
-                  value={inputKey}
-                  onChange={(e) => setInputKey(e.target.value)}
-                  placeholder={apiKey ? `${apiKey.slice(0, 10)}... (Paste new key)` : 'AIzaSy...'}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-black/50 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-[#E6B86A] text-xs font-mono"
-                  autoFocus
-                />
+            {unlockError && (
+              <div className="mb-4 p-2.5 rounded-lg bg-red-950/70 border border-red-500/50 flex items-center gap-2 text-xs text-red-200">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{unlockError}</span>
               </div>
+            )}
 
-              <div className="flex items-center gap-2 pt-1">
+            {apiKey && !authFailed ? (
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-white/80 flex items-center justify-between">
+                  <span>Active Key</span>
+                  <span className="font-mono text-[#E6B86A]">
+                    {apiKey.slice(0, 6)}••••••••
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearApiKey}
+                  className="w-full py-2.5 px-4 bg-red-900/50 hover:bg-red-900/70 text-red-100 border border-red-500/40 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Lock &amp; Clear Key</span>
+                </button>
+              </div>
+            ) : !showManualKey && ENCRYPTED_MAPS_KEY ? (
+              <form onSubmit={handleUnlockWithPassword} className="space-y-3.5">
+                <div>
+                  <label htmlFor="owner-password-input" className="block text-xs font-medium text-white/90 mb-1">
+                    Password
+                  </label>
+                  <input
+                    id="owner-password-input"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Enter your unlock password"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-black/50 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-[#E6B86A] text-xs"
+                    autoFocus
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-white/75 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    className="rounded border-white/30 bg-black/40 accent-[#E6B86A]"
+                  />
+                  <span>Remember on this browser</span>
+                </label>
+
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 px-4 venice-gold-btn rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  disabled={isDecrypting || !passwordInput}
+                  className="w-full py-2.5 px-4 venice-gold-btn rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>{isDecrypting ? 'Decrypting...' : 'Unlock Maps'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualKey(true);
+                    setUnlockError('');
+                  }}
+                  className="w-full text-center text-[11px] text-white/55 hover:text-white/90 underline cursor-pointer pt-1"
+                >
+                  Or enter a manual API key
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSaveManualKey} className="space-y-3.5">
+                {!ENCRYPTED_MAPS_KEY && (
+                  <p className="text-[11px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2.5">
+                    Encrypted vault not configured yet. Set <strong>GOOGLE_MAPS_API_KEY</strong> and <strong>UNLOCK_PASSWORD</strong> in GitHub Actions Secrets, or enter a key manually below.
+                  </p>
+                )}
+
+                <div>
+                  <label htmlFor="maps-key-input" className="block text-xs font-medium text-white/90 mb-1">
+                    Google Maps API Key
+                  </label>
+                  <input
+                    id="maps-key-input"
+                    type="password"
+                    value={inputKey}
+                    onChange={(e) => setInputKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-black/50 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-[#E6B86A] text-xs font-mono"
+                    autoFocus
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-white/75 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    className="rounded border-white/30 bg-black/40 accent-[#E6B86A]"
+                  />
+                  <span>Remember on this browser</span>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!inputKey.trim()}
+                  className="w-full py-2.5 px-4 venice-gold-btn rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>Save & Reload</span>
+                  <span>Load Maps</span>
                 </button>
-                {apiKey && (
+
+                {ENCRYPTED_MAPS_KEY && (
                   <button
                     type="button"
-                    onClick={handleClearApiKey}
-                    className="py-2.5 px-3 bg-red-900/40 hover:bg-red-900/60 text-red-200 border border-red-500/30 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                    title="Remove saved API key"
+                    onClick={() => {
+                      setShowManualKey(false);
+                      setUnlockError('');
+                    }}
+                    className="w-full text-center text-[11px] text-white/55 hover:text-white/90 underline cursor-pointer pt-1"
                   >
-                    Clear Key
+                    Back to password unlock
                   </button>
                 )}
-                {apiKey && !authFailed && (
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKeyModal(false)}
-                    className="py-2.5 px-3 bg-white/10 hover:bg-white/15 text-white/80 hover:text-white rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                  >
-                    Close
-                  </button>
-                )}
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
