@@ -280,7 +280,7 @@ dialog.venice-dialog[open]::backdrop {
 
 .filmstrip-card {
   content-visibility: auto;
-  contain-intrinsic-size: 176px 158px;
+  contain-intrinsic-size: auto 158px;
 }
 
 /* Standard Cross-Browser Scrollbars (Modern Web Guidance) */

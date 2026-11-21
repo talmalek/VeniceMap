@@ -49,7 +49,7 @@ export default defineConfig(({mode}) => {
     mode === 'development' && !unlockPassword ? mapsApiKey : '';
 
   return {
-    base: mode === 'production' ? '/VeniceMap/' : '/',
+    base: '/VeniceMap/',
     plugins: [react(), tailwindcss()],
     define: {
       'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(publicApiKey),
@@ -78,11 +78,17 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
+      port: 4174,
+      host: '127.0.0.1',
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    preview: {
+      port: 4174,
+      host: '127.0.0.1',
     },
   };
 });

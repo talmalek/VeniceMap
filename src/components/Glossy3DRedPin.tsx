@@ -39,7 +39,7 @@ export const Glossy3DRedPinSvg: React.FC<Glossy3DRedPinSvgProps> = React.memo(
             fx="28%"
             fy="18%"
           >
-            <stop offset="0%" stopColor={isSelected || isHovered ? '#FF8080' : '#FF6B6B'} />
+            <stop offset="0%" stopColor={isHovered ? '#FF8080' : '#FF6B6B'} />
             <stop offset="25%" stopColor="#EF1424" />
             <stop offset="65%" stopColor="#C40514" />
             <stop offset="100%" stopColor="#750009" />
@@ -72,22 +72,22 @@ export const Glossy3DRedPinSvg: React.FC<Glossy3DRedPinSvgProps> = React.memo(
             <feDropShadow
               dx="0"
               dy="2"
-              stdDeviation={isSelected ? '2.2' : '1.5'}
-              floodColor={isSelected ? '#DC2626' : '#000000'}
-              floodOpacity={isSelected ? '0.65' : '0.45'}
+              stdDeviation="1.5"
+              floodColor="#000000"
+              floodOpacity="0.45"
             />
           </filter>
         </defs>
 
-        {/* Outer glow ring when selected or hovered */}
-        {(isSelected || isHovered) && (
+        {/* Subtle white ring only when hovered */}
+        {isHovered && !isSelected && (
           <circle
             cx="18"
             cy="15.5"
-            r={isSelected ? '16.5' : '15.2'}
-            stroke={isSelected ? '#F5CF8B' : '#FFFFFF'}
-            strokeOpacity={isSelected ? '0.9' : '0.65'}
-            strokeWidth={isSelected ? '2' : '1.4'}
+            r="15.2"
+            stroke="#FFFFFF"
+            strokeOpacity="0.65"
+            strokeWidth="1.4"
           />
         )}
 

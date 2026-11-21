@@ -323,6 +323,28 @@ export default function App() {
     setIsAlbumActive(true);
   }, []);
 
+  const handleRemovePhoto = useCallback((photoId: string) => {
+    setAlbumPhotos((prev) => {
+      const removed = prev.find((p) => p.id === photoId);
+      if (removed && removed.imageUrl && removed.imageUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(removed.imageUrl);
+        } catch {}
+      }
+      return prev.filter((p) => p.id !== photoId);
+    });
+
+    setSelectedPhoto((current) => {
+      if (current?.id === photoId) {
+        globeRef.current?.stopOrbit();
+        return null;
+      }
+      return current;
+    });
+
+    setHoveredPhotoId((current) => (current === photoId ? null : current));
+  }, []);
+
   const mainStage = (
     <div className="relative w-screen h-screen overflow-hidden bg-[#061E19] text-white select-none">
       {/* Mandatory Google Maps Demo Key Quota Banner */}
@@ -451,6 +473,7 @@ export default function App() {
               hoveredPhotoId={hoveredPhotoId}
               onSelectPhoto={handleSelectPhoto}
               onHoverPhoto={setHoveredPhotoId}
+              onRemovePhoto={handleRemovePhoto}
               onOpenImportModal={openImportModal}
               onCloseFilmstrip={handleCloseFilmstrip}
             />

@@ -607,8 +607,8 @@ export const Globe3DLayer = React.memo(
             {visibleMarkerPhotos.map((photo) => {
               const isSelected = selectedPhoto?.id === photo.id;
               const isHovered = hoveredPhotoId === photo.id;
-              const pinWidth = isSelected ? 40 : isHovered ? 36 : 30;
-              const pinHeight = isSelected ? 52 : isHovered ? 47 : 39;
+              const pinWidth = isHovered && !isSelected ? 36 : 30;
+              const pinHeight = isHovered && !isSelected ? 47 : 39;
 
               return (
                 <Marker3D
@@ -616,7 +616,7 @@ export const Globe3DLayer = React.memo(
                   position={{
                     lat: photo.lat,
                     lng: photo.lng,
-                    altitude: isSelected ? 26 : isHovered ? 22 : 16,
+                    altitude: isHovered && !isSelected ? 22 : 16,
                   }}
                   altitudeMode={AltitudeMode.RELATIVE_TO_MESH}
                   extruded={true}

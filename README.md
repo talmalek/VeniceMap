@@ -119,15 +119,27 @@ GOOGLE_MAPS_API_KEY="YOUR_GOOGLE_MAPS_API_KEY"
 UNLOCK_PASSWORD="YOUR_STRONG_PASSWORD"
 ```
 
+> [!IMPORTANT]
+> **API Key HTTP Referrer Restrictions**:
+> The project Google Maps API key is restricted by HTTP Referrer to:
+> - `http://127.0.0.1:4174/VeniceMap/*` (Local debugging)
+> - `https://talmalek.github.io/VeniceMap/*` (Production GitHub Pages)
+>
+> You must run and access the local application at:
+> **`http://127.0.0.1:4174/VeniceMap/`**
+> Running on `localhost`, another port, or without `/VeniceMap/` will trigger a Google Maps referrer restriction error (`gm_authFailure`).
+
 Run the development server:
 ```bash
 npm run dev
+# Vite runs at http://127.0.0.1:4174/VeniceMap/
 ```
 
 Or build and preview the production bundle (with the encrypted vault active):
 ```bash
 npm run build
 npm run preview
+# Serves at http://127.0.0.1:4174/VeniceMap/
 ```
 
 ---
