@@ -11,6 +11,7 @@ import {
   Sliders,
   Sun,
   X,
+  Key,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -21,6 +22,8 @@ interface SettingsModalProps {
   onReset: () => void;
   isComparing: boolean;
   setIsComparing: (comparing: boolean) => void;
+  apiKey?: string;
+  onOpenApiKeyModal?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
@@ -32,6 +35,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
     onReset,
     isComparing,
     setIsComparing,
+    apiKey,
+    onOpenApiKeyModal,
   }) => {
     const [copied, setCopied] = useState(false);
     const [activeTab, setActiveTab] = useState<'presets' | 'adjust'>('presets');
@@ -295,6 +300,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Google Maps API Key Section */}
+        {onOpenApiKeyModal && (
+          <div className="pt-3 border-t border-white/12">
+            <button
+              type="button"
+              onClick={onOpenApiKeyModal}
+              className="w-full py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-between text-[11px] text-white/80 hover:text-white transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Key className="w-3.5 h-3.5 text-[#E6B86A]" />
+                <span>Google Maps API Key</span>
+              </div>
+              <span className="font-mono text-[10px] text-white/50">
+                {apiKey ? `${apiKey.slice(0, 6)}...` : 'Not Set'}
+              </span>
+            </button>
           </div>
         )}
 

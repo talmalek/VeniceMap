@@ -249,88 +249,103 @@ export const Globe3DLayer = React.memo(
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          const currentRange = map3d.range || liveCameraRef.current.range;
-          const newRange = Math.max(120, currentRange * 0.65);
-          map3d.flyCameraTo({
-            endCamera: {
-              center: map3d.center || {
-                lat: liveCameraRef.current.lat,
-                lng: liveCameraRef.current.lng,
-                altitude: 0,
+          try {
+            map3d.stopCameraAnimation();
+            const currentRange = map3d.range || liveCameraRef.current.range;
+            const newRange = Math.max(120, currentRange * 0.65);
+            map3d.flyCameraTo({
+              endCamera: {
+                center: map3d.center || {
+                  lat: liveCameraRef.current.lat,
+                  lng: liveCameraRef.current.lng,
+                  altitude: 0,
+                },
+                range: newRange,
+                tilt: map3d.tilt,
+                heading: map3d.heading,
               },
-              range: newRange,
-              tilt: map3d.tilt,
-              heading: map3d.heading,
-            },
-            durationMillis: 350,
-          });
+              durationMillis: 350,
+            });
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         zoomOut: () => {
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          const currentRange = map3d.range || liveCameraRef.current.range;
-          // Cannot zoom out beyond the initial home overview range
-          const newRange = Math.min(initialRangeRef.current, currentRange * 1.45);
-          const currentCenter = map3d.center || liveCameraRef.current;
-          const clampedLat = Math.min(
-            VENICE_HOME_GUARD_RAILS.north,
-            Math.max(VENICE_HOME_GUARD_RAILS.south, currentCenter.lat)
-          );
-          const clampedLng = Math.min(
-            VENICE_HOME_GUARD_RAILS.east,
-            Math.max(VENICE_HOME_GUARD_RAILS.west, currentCenter.lng)
-          );
-          map3d.flyCameraTo({
-            endCamera: {
-              center: {
-                lat: clampedLat,
-                lng: clampedLng,
-                altitude: 0,
+          try {
+            map3d.stopCameraAnimation();
+            const currentRange = map3d.range || liveCameraRef.current.range;
+            const newRange = Math.min(initialRangeRef.current, currentRange * 1.45);
+            const currentCenter = map3d.center || liveCameraRef.current;
+            const clampedLat = Math.min(
+              VENICE_HOME_GUARD_RAILS.north,
+              Math.max(VENICE_HOME_GUARD_RAILS.south, currentCenter.lat)
+            );
+            const clampedLng = Math.min(
+              VENICE_HOME_GUARD_RAILS.east,
+              Math.max(VENICE_HOME_GUARD_RAILS.west, currentCenter.lng)
+            );
+            map3d.flyCameraTo({
+              endCamera: {
+                center: {
+                  lat: clampedLat,
+                  lng: clampedLng,
+                  altitude: 0,
+                },
+                range: newRange,
+                tilt: map3d.tilt,
+                heading: map3d.heading,
               },
-              range: newRange,
-              tilt: map3d.tilt,
-              heading: map3d.heading,
-            },
-            durationMillis: 350,
-          });
+              durationMillis: 350,
+            });
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         resetHome: () => {
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          map3d.flyCameraTo({
-            endCamera: {
-              center: {lat: VENICE_CENTER.lat, lng: VENICE_CENTER.lng, altitude: 0},
-              range: initialRangeRef.current,
-              tilt: 0,
-              heading: 0,
-            },
-            durationMillis: 750,
-          });
-          onTiltChangeRef.current?.(false);
+          try {
+            map3d.stopCameraAnimation();
+            map3d.flyCameraTo({
+              endCamera: {
+                center: {lat: VENICE_CENTER.lat, lng: VENICE_CENTER.lng, altitude: 0},
+                range: initialRangeRef.current,
+                tilt: 0,
+                heading: 0,
+              },
+              durationMillis: 750,
+            });
+            onTiltChangeRef.current?.(false);
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         exploreIn: () => {
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          map3d.flyCameraTo({
-            endCamera: {
-              center: {lat: VENICE_CENTER.lat, lng: VENICE_CENTER.lng, altitude: 0},
-              range: 1850,
-              tilt: 48,
-              heading: 18,
-            },
-            durationMillis: 1350,
-          });
-          onTiltChangeRef.current?.(true);
+          try {
+            map3d.stopCameraAnimation();
+            map3d.flyCameraTo({
+              endCamera: {
+                center: {lat: VENICE_CENTER.lat, lng: VENICE_CENTER.lng, altitude: 0},
+                range: 1850,
+                tilt: 48,
+                heading: 18,
+              },
+              durationMillis: 1350,
+            });
+            onTiltChangeRef.current?.(true);
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         toggleTilt: () => {
@@ -340,75 +355,88 @@ export const Globe3DLayer = React.memo(
 
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return false;
-          map3d.stopCameraAnimation();
 
-          const currentTilt = map3d.tilt || liveCameraRef.current.tilt;
-          // If 3D is active or a fly-over/orbit was in progress, disable 3D and return straight overhead (tilt 0, heading 0)
-          const shouldDisable3D = wasFlyingOrOrbiting || currentTilt > 15;
-          const nextTilt = shouldDisable3D ? 0 : 60;
+          try {
+            map3d.stopCameraAnimation();
 
-          const targetCenter = wasFlyingOrOrbiting
-            ? {
-                lat: orbitCenterRef.current.lat,
-                lng: orbitCenterRef.current.lng,
-                altitude: 0,
-              }
-            : map3d.center || {
-                lat: liveCameraRef.current.lat,
-                lng: liveCameraRef.current.lng,
-                altitude: 0,
-              };
+            const currentTilt = map3d.tilt || liveCameraRef.current.tilt;
+            const shouldDisable3D = wasFlyingOrOrbiting || currentTilt > 15;
+            const nextTilt = shouldDisable3D ? 0 : 60;
 
-          map3d.flyCameraTo({
-            endCamera: {
-              center: targetCenter,
-              range: map3d.range || liveCameraRef.current.range,
-              tilt: nextTilt,
-              heading: nextTilt === 0 ? 0 : map3d.heading || liveCameraRef.current.heading,
-            },
-            durationMillis: 600,
-          });
-          const isNow3D = nextTilt > 0;
-          onTiltChangeRef.current?.(isNow3D);
-          return isNow3D;
+            const targetCenter = wasFlyingOrOrbiting
+              ? {
+                  lat: orbitCenterRef.current.lat,
+                  lng: orbitCenterRef.current.lng,
+                  altitude: 0,
+                }
+              : map3d.center || {
+                  lat: liveCameraRef.current.lat,
+                  lng: liveCameraRef.current.lng,
+                  altitude: 0,
+                };
+
+            map3d.flyCameraTo({
+              endCamera: {
+                center: targetCenter,
+                range: map3d.range || liveCameraRef.current.range,
+                tilt: nextTilt,
+                heading: nextTilt === 0 ? 0 : map3d.heading || liveCameraRef.current.heading,
+              },
+              durationMillis: 600,
+            });
+            const isNow3D = nextTilt > 0;
+            onTiltChangeRef.current?.(isNow3D);
+            return isNow3D;
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+            return false;
+          }
         },
 
         rotate45: () => {
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          const nextHeading = ((map3d.heading || liveCameraRef.current.heading) + 45) % 360;
-          map3d.flyCameraTo({
-            endCamera: {
-              center: map3d.center || {
-                lat: liveCameraRef.current.lat,
-                lng: liveCameraRef.current.lng,
-                altitude: 0,
+          try {
+            map3d.stopCameraAnimation();
+            const nextHeading = ((map3d.heading || liveCameraRef.current.heading) + 45) % 360;
+            map3d.flyCameraTo({
+              endCamera: {
+                center: map3d.center || {
+                  lat: liveCameraRef.current.lat,
+                  lng: liveCameraRef.current.lng,
+                  altitude: 0,
+                },
+                range: map3d.range || liveCameraRef.current.range,
+                tilt: map3d.tilt || liveCameraRef.current.tilt,
+                heading: nextHeading,
               },
-              range: map3d.range || liveCameraRef.current.range,
-              tilt: map3d.tilt || liveCameraRef.current.tilt,
-              heading: nextHeading,
-            },
-            durationMillis: 450,
-          });
+              durationMillis: 450,
+            });
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         flyToLocation: (lat: number, lng: number, range: number = 900) => {
           stopOrbit();
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
-          map3d.stopCameraAnimation();
-          map3d.flyCameraTo({
-            endCamera: {
-              center: {lat, lng, altitude: 0},
-              range,
-              tilt: 54,
-              heading: map3d.heading || 12,
-            },
-            durationMillis: 1200,
-          });
-          onTiltChangeRef.current?.(true);
+          try {
+            map3d.stopCameraAnimation();
+            map3d.flyCameraTo({
+              endCamera: {
+                center: {lat, lng, altitude: 0},
+                range,
+                tilt: 54,
+                heading: map3d.heading || 12,
+              },
+              durationMillis: 1200,
+            });
+            onTiltChangeRef.current?.(true);
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
         },
 
         flyToLocationAndOrbit: (lat: number, lng: number, range: number = 440, tilt: number = 62) => {
@@ -416,25 +444,29 @@ export const Globe3DLayer = React.memo(
           const map3d = map3dContainerRef.current?.map3d;
           if (!map3d) return;
 
-          map3d.stopCameraAnimation();
-          const currentHeading = map3d.heading || liveCameraRef.current.heading || 0;
-          orbitHeadingRef.current = currentHeading;
-          orbitCenterRef.current = {lat, lng};
-          orbitRangeRef.current = range;
-          orbitTiltRef.current = tilt;
+          try {
+            map3d.stopCameraAnimation();
+            const currentHeading = map3d.heading || liveCameraRef.current.heading || 0;
+            orbitHeadingRef.current = currentHeading;
+            orbitCenterRef.current = {lat, lng};
+            orbitRangeRef.current = range;
+            orbitTiltRef.current = tilt;
 
-          onTiltChangeRef.current?.(true);
+            onTiltChangeRef.current?.(true);
 
-          // Step 1: Slow, majestic fly-over zoom in to the pin location
-          map3d.flyCameraTo({
-            endCamera: {
-              center: {lat, lng, altitude: 0},
-              range,
-              tilt,
-              heading: currentHeading,
-            },
-            durationMillis: 3000,
-          });
+            // Step 1: Slow, majestic fly-over zoom in to the pin location
+            map3d.flyCameraTo({
+              endCamera: {
+                center: {lat, lng, altitude: 0},
+                range,
+                tilt,
+                heading: currentHeading,
+              },
+              durationMillis: 3000,
+            });
+          } catch (e) {
+            console.warn('Map3D camera command failed:', e);
+          }
 
           // Step 2: Begin continuous slow circling orbit around location ENDLESSLY
           // Automatically pauses when tab is backgrounded (Page Visibility API) to save CPU/GPU & battery
