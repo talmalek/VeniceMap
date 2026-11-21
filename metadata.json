@@ -1,0 +1,6 @@
+{
+  "name": "Venice Tour — Interactive Aerial Map & Geotagged Photography",
+  "description": "An interactive, georeferenced high-resolution aerial photography tour of Venice that seamlessly transforms into Google Maps on zoom and plots geotagged Google Photos by EXIF GPS coordinates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
