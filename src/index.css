@@ -151,6 +151,71 @@ input[type='range'].venice-slider::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* Molten Amber Route Timeline Range Slider */
+input[type='range'].route-timeline-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+}
+
+input[type='range'].route-timeline-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 6px;
+}
+
+input[type='range'].route-timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -4.5px;
+  border-radius: 9999px;
+  background: #FFF6D6;
+  border: 2px solid #FF7A18;
+  box-shadow:
+    0 0 12px rgba(255, 105, 20, 0.95),
+    0 0 24px rgba(255, 58, 0, 0.6);
+  cursor: pointer;
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+input[type='range'].route-timeline-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+input[type='range'].route-timeline-slider::-moz-range-track {
+  background: transparent;
+  height: 6px;
+}
+
+input[type='range'].route-timeline-slider::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 9999px;
+  background: #FFF6D6;
+  border: 2px solid #FF7A18;
+  box-shadow:
+    0 0 12px rgba(255, 105, 20, 0.95),
+    0 0 24px rgba(255, 58, 0, 0.6);
+  cursor: pointer;
+}
+
+@keyframes routeHeadPulse {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 0.42;
+  }
+}
+
+.route-head-pulse {
+  animation: routeHeadPulse 1.6s ease-in-out infinite;
+}
+
 /* Motion Utilities */
 @keyframes fadeInSoft {
   from {
@@ -307,7 +372,8 @@ dialog.venice-dialog[open]::backdrop {
 
   .pin-drop-anim,
   .pin-float-anim,
-  .pin-shadow-anim {
+  .pin-shadow-anim,
+  .route-head-pulse {
     animation: none !important;
   }
 }

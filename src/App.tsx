@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, {useState, useEffect, useCallback, lazy, Suspense} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense} from 'react';
 import {APIProvider} from '@vis.gl/react-google-maps';
 import {
   GeotaggedPhoto,
@@ -12,7 +12,18 @@ import {
 } from './data/veniceData';
 import {Globe3DLayer, Globe3DLayerRef} from './components/Globe3DLayer';
 import {CloudFrameOverlay} from './components/CloudFrameOverlay';
+import {
+  RouteTimelineOverlay,
+  PlaybackSpeed,
+} from './components/RouteTimelineOverlay';
 import {AlbumParseResult, revokeAlbumObjectUrls} from './utils/exifParser';
+import {
+  ParsedRouteData,
+  RoutePoint,
+  parseRouteJson,
+  parseRouteObject,
+  getRouteProgressAtTime,
+} from './utils/routeParser';
 import {
   ColorGradingSettings,
   DEFAULT_COLOR_SETTINGS,
@@ -27,6 +38,7 @@ import {
   Minus,
   Plus,
   RotateCw,
+  Route,
   Sliders,
   AlertCircle,
   Check,
@@ -39,6 +51,7 @@ import {decryptApiKey} from './utils/cryptoKey';
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const AlbumImportModal = lazy(() => import('./components/AlbumImportModal'));
 const AlbumFilmstrip = lazy(() => import('./components/AlbumFilmstrip'));
+const RouteCalibrationModal = lazy(() => import('./components/RouteCalibrationModal'));
 
 const API_KEY_STORAGE_KEY = 'venice_maps_api_key';
 const ENCRYPTED_MAPS_KEY = (import.meta.env.VITE_ENCRYPTED_MAPS_KEY || '').trim();
@@ -214,6 +227,167 @@ export default function App() {
   const [selectedPhoto, setSelectedPhoto] = useState<GeotaggedPhoto | null>(null);
   const [hoveredPhotoId, setHoveredPhotoId] = useState<string | null>(null);
 
+  // Google Maps Route Timeline State (strictly filtered to Venice map bounds)
+  const routeFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [routeData, setRouteData] = useState<ParsedRouteData | null>(null);
+  const [originalRoutePoints, setOriginalRoutePoints] = useState<RoutePoint[]>([]);
+  const [isSampleRoute, setIsSampleRoute] = useState<boolean>(false);
+  const [isRouteCalibrationOpen, setIsRouteCalibrationOpen] = useState<boolean>(false);
+  const [routeCurrentTimeMs, setRouteCurrentTimeMs] = useState<number>(0);
+  const [isRoutePlaying, setIsRoutePlaying] = useState<boolean>(false);
+  const [routeSpeed, setRouteSpeed] = useState<PlaybackSpeed>(1);
+  const [followRouteCamera, setFollowRouteCamera] = useState<boolean>(false);
+  const [routeError, setRouteError] = useState<string>('');
+
+  const handleTriggerRouteFilePicker = useCallback(() => {
+    setRouteError('');
+    routeFileInputRef.current?.click();
+  }, []);
+
+  const handleLoadSampleRoute = useCallback(async () => {
+    try {
+      const mod = await import('./data/veniceSampleRoute.json');
+      const parsed = parseRouteObject(mod.default, 'Venice Route · 24/09/2026');
+      setRouteError('');
+      setIsRoutePlaying(false);
+      setFollowRouteCamera(false);
+      setIsRouteCalibrationOpen(false);
+      setRouteData(parsed);
+      setOriginalRoutePoints(parsed.points);
+      setIsSampleRoute(true);
+      setRouteCurrentTimeMs(parsed.startTimeMs);
+    } catch (err) {
+      setRouteError(
+        err instanceof Error ? err.message : 'Failed to load embedded Venice sample route.'
+      );
+    }
+  }, []);
+
+  const handleRouteFileSelected = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = parseRouteJson(text, file.name);
+        setRouteError('');
+        setIsRoutePlaying(false);
+        setFollowRouteCamera(false);
+        setIsRouteCalibrationOpen(false);
+        setRouteData(parsed);
+        setOriginalRoutePoints(parsed.points);
+        setIsSampleRoute(false);
+        setRouteCurrentTimeMs(parsed.startTimeMs);
+      } catch (err) {
+        setRouteError(
+          err instanceof Error ? err.message : 'Failed to load route JSON file.'
+        );
+      }
+    },
+    []
+  );
+
+  const handleOpenRouteCalibration = useCallback(() => {
+    if (!routeData) return;
+    setIsRoutePlaying(false);
+    setIsSettingsOpen(false);
+    setIsRouteCalibrationOpen(true);
+  }, [routeData]);
+
+  const handleApplyCalibratedRoute = useCallback((updatedRoute: ParsedRouteData) => {
+    setRouteData(updatedRoute);
+    setRouteCurrentTimeMs((prev) =>
+      Math.min(
+        updatedRoute.endTimeMs,
+        Math.max(updatedRoute.startTimeMs, prev)
+      )
+    );
+  }, []);
+
+  // Smooth requestAnimationFrame timeline playback loop
+  useEffect(() => {
+    if (!isRoutePlaying || !routeData) return;
+
+    const totalDuration = Math.max(1, routeData.endTimeMs - routeData.startTimeMs);
+    const BASE_PLAYBACK_SECONDS = 45;
+    const msPerRealSecond = (totalDuration / BASE_PLAYBACK_SECONDS) * routeSpeed;
+
+    let rafId: number | null = null;
+    let lastFrameTime = performance.now();
+
+    const tick = (now: number) => {
+      const dtSec = Math.min(0.1, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      let reachedEnd = false;
+      setRouteCurrentTimeMs((prev) => {
+        const next = prev + dtSec * msPerRealSecond;
+        if (next >= routeData.endTimeMs) {
+          reachedEnd = true;
+          return routeData.endTimeMs;
+        }
+        return next;
+      });
+
+      if (reachedEnd) {
+        setIsRoutePlaying(false);
+        return;
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [isRoutePlaying, routeData, routeSpeed]);
+
+  const handleToggleRoutePlay = useCallback(() => {
+    if (!routeData) return;
+    setIsRoutePlaying((playing) => {
+      if (!playing && routeCurrentTimeMs >= routeData.endTimeMs) {
+        setRouteCurrentTimeMs(routeData.startTimeMs);
+      }
+      return !playing;
+    });
+  }, [routeData, routeCurrentTimeMs]);
+
+  const handleSeekRoute = useCallback((timeMs: number) => {
+    setRouteCurrentTimeMs(timeMs);
+  }, []);
+
+  const handleRestartRoute = useCallback(() => {
+    if (!routeData) return;
+    setRouteCurrentTimeMs(routeData.startTimeMs);
+  }, [routeData]);
+
+  const handleCloseRoute = useCallback(() => {
+    setIsRoutePlaying(false);
+    setFollowRouteCamera(false);
+    setIsRouteCalibrationOpen(false);
+    setRouteData(null);
+    setOriginalRoutePoints([]);
+    setIsSampleRoute(false);
+    setRouteCurrentTimeMs(0);
+    setRouteError('');
+  }, []);
+
+  const handleToggleRoute = useCallback(() => {
+    if (routeData) {
+      handleCloseRoute();
+    } else {
+      void handleLoadSampleRoute();
+    }
+  }, [routeData, handleCloseRoute, handleLoadSampleRoute]);
+
+  const routeSnapshot = useMemo(() => {
+    if (!routeData) return null;
+    return getRouteProgressAtTime(routeData, routeCurrentTimeMs);
+  }, [routeData, routeCurrentTimeMs]);
+
   const albumPhotosRef = React.useRef<GeotaggedPhoto[]>(albumPhotos);
   useEffect(() => {
     albumPhotosRef.current = albumPhotos;
@@ -376,10 +550,24 @@ export default function App() {
           hoveredPhotoId={hoveredPhotoId}
           colorSettings={colorSettings}
           isComparing={isComparing}
+          routePath={routeSnapshot?.path}
+          routeHead={routeSnapshot?.head ?? null}
+          followRouteHead={followRouteCamera}
           onTiltChange={setIs3DActive}
           onZoomProgressChange={setZoomProgress}
           onSelectPhoto={handleSelectPhoto}
           onHoverPhoto={setHoveredPhotoId}
+        />
+
+        {/* Hidden JSON File Input for Google Maps Location Route POC */}
+        <input
+          ref={routeFileInputRef}
+          type="file"
+          accept=".json,application/json"
+          onChange={handleRouteFileSelected}
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
         />
 
         {/* Explore Venice Brush Hero, White Vector Map & Dynamic Upper-Left Logo Glide */}
@@ -450,6 +638,23 @@ export default function App() {
 
             <button
               type="button"
+              onClick={handleToggleRoute}
+              className={`py-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 border-b-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FF8C2A] ${
+                routeData
+                  ? 'text-[#FFB35C] border-[#FF7A18]'
+                  : 'text-white/80 border-transparent hover:text-white hover:border-white/50'
+              }`}
+              title={
+                routeData
+                  ? 'Hide Route Timeline from Map'
+                  : 'Show Venice 24/09/2026 Route Example (or load your own JSON)'
+              }
+            >
+              {routeData ? 'Hide Route' : 'Show Route'}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsSettingsOpen((prev) => !prev)}
               className={`hidden md:inline-block py-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 border-b-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] ${
                 isSettingsOpen
@@ -504,9 +709,73 @@ export default function App() {
                 setInputKey(apiKey);
                 setShowApiKeyModal(true);
               }}
+              hasLoadedRoute={Boolean(routeData)}
+              routePointCount={routeData?.points.length ?? 0}
+              onOpenRouteCalibration={handleOpenRouteCalibration}
+              onLoadSampleRoute={() => {
+                setIsSettingsOpen(false);
+                void handleLoadSampleRoute();
+              }}
+              onLoadRouteJson={() => {
+                setIsSettingsOpen(false);
+                handleTriggerRouteFilePicker();
+              }}
+            />
+          )}
+
+          {isRouteCalibrationOpen && routeData && (
+            <RouteCalibrationModal
+              isOpen={isRouteCalibrationOpen}
+              route={routeData}
+              originalPoints={originalRoutePoints}
+              apiKey={apiKey}
+              onApply={handleApplyCalibratedRoute}
+              onClose={() => setIsRouteCalibrationOpen(false)}
             />
           )}
         </Suspense>
+
+        {/* Semi-Transparent Route Playback Timeline Overlay */}
+        {routeData && routeSnapshot && !isRouteCalibrationOpen && (
+          <RouteTimelineOverlay
+            route={routeData}
+            currentTimeMs={routeCurrentTimeMs}
+            distanceMeters={routeSnapshot.distanceMeters}
+            isPlaying={isRoutePlaying}
+            speed={routeSpeed}
+            followCamera={followRouteCamera}
+            isAlbumActive={isAlbumActive}
+            isSampleRoute={isSampleRoute}
+            onTogglePlay={handleToggleRoutePlay}
+            onSeek={handleSeekRoute}
+            onRestart={handleRestartRoute}
+            onSpeedChange={setRouteSpeed}
+            onToggleFollowCamera={() => setFollowRouteCamera((prev) => !prev)}
+            onOpenCalibration={handleOpenRouteCalibration}
+            onLoadSampleRoute={() => void handleLoadSampleRoute()}
+            onLoadAnother={handleTriggerRouteFilePicker}
+            onClose={handleCloseRoute}
+          />
+        )}
+
+        {/* Route JSON Load Error Toast */}
+        {routeError && (
+          <div
+            role="alert"
+            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 max-w-md px-4 py-2.5 rounded-xl bg-red-950/90 border border-red-500/50 text-red-100 text-xs shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-fade-in"
+          >
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{routeError}</span>
+            <button
+              type="button"
+              onClick={() => setRouteError('')}
+              aria-label="Dismiss error"
+              className="ml-1 p-1 rounded hover:bg-white/10 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
           {/* Right-Side Sleek Lagoon Emerald Camera & Utility Dock */}
           <div className="fixed top-4 right-4 z-30 flex flex-col items-center gap-2.5">
@@ -548,6 +817,24 @@ export default function App() {
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/12 hover:text-white transition-all duration-150 active:scale-95 cursor-pointer"
               >
                 <FolderOpen className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleRoute}
+                title={
+                  routeData
+                    ? `Hide Route Timeline (${routeData.points.length} pts)`
+                    : 'Show Venice 24/09/2026 Example Route'
+                }
+                aria-label="Toggle Route Timeline on Map"
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-95 cursor-pointer ${
+                  routeData
+                    ? 'bg-[#FF7A18]/25 border border-[#FF8C2A]/75 text-[#FF7A18] shadow-[0_0_16px_rgba(255,105,20,0.45)]'
+                    : 'text-white/80 hover:bg-white/12 hover:text-white'
+                }`}
+              >
+                <Route className="w-4 h-4" />
               </button>
             </div>
 
@@ -677,7 +964,7 @@ export default function App() {
       {apiKey ? (
         <APIProvider
           apiKey={apiKey}
-          libraries={['places', 'marker', 'maps', 'core', 'maps3d']}
+          libraries={['places', 'marker', 'maps', 'core', 'maps3d', 'routes']}
         >
           {mainStage}
         </APIProvider>

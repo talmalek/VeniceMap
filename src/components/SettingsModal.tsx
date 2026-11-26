@@ -8,6 +8,7 @@ import {
   Copy,
   Eye,
   RotateCcw,
+  Route,
   Sliders,
   Sun,
   X,
@@ -24,6 +25,11 @@ interface SettingsModalProps {
   setIsComparing: (comparing: boolean) => void;
   apiKey?: string;
   onOpenApiKeyModal?: () => void;
+  hasLoadedRoute?: boolean;
+  routePointCount?: number;
+  onOpenRouteCalibration?: () => void;
+  onLoadSampleRoute?: () => void;
+  onLoadRouteJson?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
@@ -37,6 +43,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
     setIsComparing,
     apiKey,
     onOpenApiKeyModal,
+    hasLoadedRoute = false,
+    routePointCount = 0,
+    onOpenRouteCalibration,
+    onLoadSampleRoute,
+    onLoadRouteJson,
   }) => {
     const [copied, setCopied] = useState(false);
     const [activeTab, setActiveTab] = useState<'presets' | 'adjust'>('presets');
@@ -321,6 +332,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(
             </button>
           </div>
         )}
+
+        {/* Route Path Calibration Section */}
+        <div className="pt-3 mb-3 border-t border-white/12">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-white/85 flex items-center gap-1.5">
+              <Route className="w-3.5 h-3.5 text-[#FFB35C]" />
+              <span>Route Calibration</span>
+            </span>
+            {hasLoadedRoute && (
+              <span className="text-[10px] font-mono-tabular text-[#FFB35C]">
+                {routePointCount} pts
+              </span>
+            )}
+          </div>
+          {hasLoadedRoute ? (
+            <button
+              type="button"
+              onClick={onOpenRouteCalibration}
+              className="w-full py-2 px-3 rounded-lg bg-[#FF7A18]/20 hover:bg-[#FF7A18]/32 border border-[#FF8C2A]/60 text-[#FFD27D] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Route className="w-3.5 h-3.5" />
+              <span>Open Route Calibration Editor</span>
+            </button>
+          ) : (
+            <div className="space-y-2">
+              {onLoadSampleRoute && (
+                <button
+                  type="button"
+                  onClick={onLoadSampleRoute}
+                  className="w-full py-2 px-3 rounded-lg bg-[#FF7A18]/20 hover:bg-[#FF7A18]/32 border border-[#FF8C2A]/60 text-[#FFD27D] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Route className="w-3.5 h-3.5" />
+                  <span>Show 24/09/2026 Example Route</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onLoadRouteJson}
+                className="w-full py-2 px-3 rounded-lg bg-white/8 hover:bg-white/14 border border-white/15 text-white/85 hover:text-white text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Route className="w-3.5 h-3.5 text-[#FFB35C]" />
+                <span>Load Custom Route JSON</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Compare Hold Action */}
         <div className="pt-3 border-t border-white/12">

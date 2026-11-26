@@ -49,6 +49,9 @@ interface Globe3DLayerProps {
   hoveredPhotoId: string | null;
   colorSettings: ColorGradingSettings;
   isComparing: boolean;
+  routePath?: Array<{lat: number; lng: number; altitude: number}>;
+  routeHead?: {lat: number; lng: number} | null;
+  followRouteHead?: boolean;
   onTiltChange?: (is3D: boolean) => void;
   onZoomProgressChange?: (progress: number) => void;
   onSelectPhoto: (photo: GeotaggedPhoto | null) => void;
@@ -70,6 +73,9 @@ export const Globe3DLayer = React.memo(
       hoveredPhotoId,
       colorSettings,
       isComparing,
+      routePath,
+      routeHead,
+      followRouteHead = false,
       onTiltChange,
       onZoomProgressChange,
       onSelectPhoto,
@@ -541,6 +547,128 @@ export const Globe3DLayer = React.memo(
     const kEdge = (-0.18 * clarityRatio).toFixed(4);
     const kCenter = (1 + 0.72 * clarityRatio).toFixed(4);
 
+    // Glowing 3-layer Molten Amber / Solar Eclipse 3D Route Polylines
+    interface Polyline3DInstance extends HTMLElement {
+      path?: Array<{lat: number; lng: number; altitude?: number}> | null;
+    }
+    const routePolylinesRef = useRef<Polyline3DInstance[]>([]);
+
+    useEffect(() => {
+      const map3d = map3dContainerRef.current?.map3d;
+      if (!map3d) return;
+
+      const clearPolylines = () => {
+        for (const poly of routePolylinesRef.current) {
+          try {
+            poly.remove();
+          } catch {
+            // Ignore already removed elements
+          }
+        }
+        routePolylinesRef.current = [];
+      };
+
+      if (!routePath || routePath.length < 2) {
+        clearPolylines();
+        return;
+      }
+
+      const Polyline3DCtor = (
+        window as unknown as {
+          google?: {
+            maps?: {
+              maps3d?: {
+                Polyline3DElement?: new (options?: {
+                  altitudeMode?: string;
+                  strokeColor?: string;
+                  strokeWidth?: number;
+                  outerColor?: string;
+                  outerWidth?: number;
+                  drawsOccludedSegments?: boolean;
+                  zIndex?: number;
+                }) => Polyline3DInstance;
+              };
+            };
+          };
+        }
+      ).google?.maps?.maps3d?.Polyline3DElement;
+
+      if (!Polyline3DCtor) return;
+
+      if (routePolylinesRef.current.length === 0) {
+        // Layer 1: Wide atmospheric crimson-orange bloom
+        const outerBloom = new Polyline3DCtor({
+          altitudeMode: 'CLAMP_TO_GROUND',
+          strokeColor: 'rgba(255, 58, 0, 0.24)',
+          strokeWidth: 24,
+          outerColor: 'rgba(255, 34, 0, 0.12)',
+          outerWidth: 0.45,
+          drawsOccludedSegments: true,
+          zIndex: 10,
+        });
+
+        // Layer 2: Fiery molten orange mid glow
+        const midGlow = new Polyline3DCtor({
+          altitudeMode: 'CLAMP_TO_GROUND',
+          strokeColor: 'rgba(255, 122, 24, 0.62)',
+          strokeWidth: 12,
+          outerColor: 'rgba(255, 95, 15, 0.36)',
+          outerWidth: 0.4,
+          drawsOccludedSegments: true,
+          zIndex: 11,
+        });
+
+        // Layer 3: Hot molten amber core
+        const coreLine = new Polyline3DCtor({
+          altitudeMode: 'CLAMP_TO_GROUND',
+          strokeColor: '#FFF3C4',
+          strokeWidth: 4.5,
+          outerColor: '#FF8C2A',
+          outerWidth: 0.45,
+          drawsOccludedSegments: true,
+          zIndex: 12,
+        });
+
+        map3d.append(outerBloom);
+        map3d.append(midGlow);
+        map3d.append(coreLine);
+        routePolylinesRef.current = [outerBloom, midGlow, coreLine];
+      }
+
+      for (const poly of routePolylinesRef.current) {
+        poly.path = routePath;
+      }
+    }, [routePath]);
+
+    // Cleanup route polylines on unmount
+    useEffect(() => {
+      return () => {
+        for (const poly of routePolylinesRef.current) {
+          try {
+            poly.remove();
+          } catch {}
+        }
+        routePolylinesRef.current = [];
+      };
+    }, []);
+
+    // Optional smooth camera follow on the moving route head
+    useEffect(() => {
+      if (!followRouteHead || !routeHead) return;
+      const map3d = map3dContainerRef.current?.map3d;
+      if (!map3d) return;
+
+      try {
+        map3d.center = {
+          lat: routeHead.lat,
+          lng: routeHead.lng,
+          altitude: 0,
+        };
+      } catch {
+        // Ignore transient camera assignment errors
+      }
+    }, [followRouteHead, routeHead]);
+
     // Filter visible 3D markers: when a specific location is clicked/orbiting, show ONLY that pin
     const visibleMarkerPhotos = useMemo(() => {
       if (!showLocations) return [];
@@ -637,6 +765,59 @@ export const Globe3DLayer = React.memo(
                 </Marker3D>
               );
             })}
+
+            {/* Glowing Molten Amber Route Head Beacon */}
+            {routeHead && (
+              <Marker3D
+                position={{
+                  lat: routeHead.lat,
+                  lng: routeHead.lng,
+                  altitude: 10,
+                }}
+                altitudeMode={AltitudeMode.RELATIVE_TO_MESH}
+                extruded={false}
+                sizePreserved={true}
+                drawsWhenOccluded={true}
+                collisionBehavior={CollisionBehavior.REQUIRED}
+                zIndex={60}
+                title="Current Route Position"
+              >
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 36 36"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <radialGradient id="route-head-corona" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#FFF6D6" stopOpacity="1" />
+                      <stop offset="32%" stopColor="#FF8C2A" stopOpacity="0.9" />
+                      <stop offset="68%" stopColor="#FF4800" stopOpacity="0.42" />
+                      <stop offset="100%" stopColor="#FF2200" stopOpacity="0" />
+                    </radialGradient>
+                  </defs>
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="17"
+                    fill="url(#route-head-corona)"
+                    className="route-head-pulse"
+                    style={{transformOrigin: '18px 18px'}}
+                  />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="6"
+                    fill="#FF7A18"
+                    stroke="#FFF6D6"
+                    strokeWidth="2"
+                  />
+                  <circle cx="18" cy="18" r="2.5" fill="#FFFFFF" />
+                </svg>
+              </Marker3D>
+            )}
           </Map3D>
         </div>
       </div>
