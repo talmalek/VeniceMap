@@ -574,6 +574,7 @@ export default function App() {
         <CloudFrameOverlay
           zoomProgress={zoomProgress}
           isAlbumActive={isAlbumActive}
+          isRouteActive={Boolean(routeData)}
           onExploreClick={handleExploreClick}
           onResetHomeClick={handleResetHome}
           onFlyToSpot={handleFlyToSpot}
@@ -590,7 +591,7 @@ export default function App() {
               type="button"
               onClick={handleResetHome}
               className={`py-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 border-b-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] ${
-                zoomProgress < 0.15 && !isAlbumActive
+                zoomProgress < 0.15 && !isAlbumActive && !routeData
                   ? 'text-white border-[#E6B86A]'
                   : 'text-white/80 border-transparent hover:text-white hover:border-white/50'
               }`}
@@ -602,7 +603,7 @@ export default function App() {
               type="button"
               onClick={handleExploreClick}
               className={`hidden sm:inline-block py-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 border-b-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E6B86A] ${
-                zoomProgress >= 0.15 && !isAlbumActive
+                zoomProgress >= 0.15 && !isAlbumActive && !routeData
                   ? 'text-white border-[#E6B86A]'
                   : 'text-white/80 border-transparent hover:text-white hover:border-white/50'
               }`}

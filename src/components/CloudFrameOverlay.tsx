@@ -5,6 +5,7 @@ import {VeniceVectorMap} from './VeniceVectorMap';
 interface CloudFrameOverlayProps {
   zoomProgress: number; // 0 = overview, 1 = zoomed in
   isAlbumActive?: boolean;
+  isRouteActive?: boolean;
   onExploreClick: () => void;
   onResetHomeClick: () => void;
   onFlyToSpot: (lat: number, lng: number, range?: number) => void;
@@ -15,6 +16,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
   ({
     zoomProgress,
     isAlbumActive = false,
+    isRouteActive = false,
     onExploreClick,
     onResetHomeClick,
     onFlyToSpot,
@@ -33,8 +35,10 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
       return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Smoothly clamp zoomProgress [0..1]
-    const p = Math.max(0, Math.min(1, zoomProgress));
+    // Collapse hero overlay and dock logo to upper-left when album or route is active
+    const isCollapsed = isAlbumActive || isRouteActive;
+    // Smoothly clamp effective progress [0..1]
+    const p = isCollapsed ? 1 : Math.max(0, Math.min(1, zoomProgress));
     // Gentle ease-out curve for the logo glide so initial scroll gives responsive motion
     const glide = 1 - Math.pow(1 - p, 1.8);
 
@@ -43,7 +47,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
     const vectorMapOpacity = Math.max(0, 1 - p * 2.15);
     const vectorMapScale = 1 + p * 0.16;
     const cardsOpacity = Math.max(0, 1 - p * 2.6);
-    const showBottomCards = !isAlbumActive && cardsOpacity > 0.02;
+    const showBottomCards = !isCollapsed && cardsOpacity > 0.02;
 
     // Responsive geometry for the centered "EXPLORE VENICE" editorial serif logo + Venice Vector Map:
     // Both elements are symmetrically centered on the screen at overview (p = 0);
@@ -192,7 +196,9 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
           style={{
             transformOrigin: 'top left',
             transform: `translate3d(${currentX.toFixed(1)}px, ${currentY.toFixed(1)}px, 0) scale(${currentScale.toFixed(4)})`,
-            transition: 'transform 90ms cubic-bezier(0.22, 1, 0.36, 1)',
+            transition: isCollapsed
+              ? 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)'
+              : 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)',
             width: `${logoNaturalWidth}px`,
           }}
         >
@@ -221,7 +227,7 @@ export const CloudFrameOverlay: React.FC<CloudFrameOverlayProps> = React.memo(
         </button>
 
         {/* Quiet Scroll-to-Zoom Hint (Overview Only, fades immediately on scroll) */}
-        {scrollHintOpacity > 0.02 && !isAlbumActive && (
+        {scrollHintOpacity > 0.02 && !isCollapsed && (
           <div
             className="hidden md:flex absolute left-1/2 bottom-[168px] -translate-x-1/2 items-center gap-2 text-[11px] font-medium tracking-[0.18em] text-white/70 uppercase drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] will-change-[opacity]"
             style={{opacity: scrollHintOpacity}}
